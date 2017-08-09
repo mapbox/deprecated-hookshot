@@ -119,6 +119,58 @@ const WebhookMethod = {
   }
 };
 
+const WebhookPassthroughMethod = (lambda) => ({
+  Type: 'AWS::ApiGateway::Method',
+  Properties: {
+    RestApiId: cf.ref('WebhookApi'),
+    ResourceId: cf.ref('WebhookResource'),
+    ApiKeyRequired: false,
+    AuthorizationType: 'None',
+    HttpMethod: 'POST',
+    Integration: {
+      Type: 'AWS',
+      IntegrationHttpMethod: 'POST',
+      IntegrationResponses: [
+        {
+          StatusCode: 200
+        },
+        {
+          StatusCode: 500,
+          SelectionPattern: '^error.*'
+        },
+        {
+          StatusCode: 400,
+          SelectionPattern: '^invalid.*'
+        }
+      ],
+      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${lambda}.Arn}/invocations`),
+      RequestTemplates: {
+        'application/json': "{\"headers\":{},\"body\":$input.json('$')}" // @TODO: include all headers
+      }
+    },
+    MethodResponses: [
+      {
+        StatusCode: '200',
+        ResponseModels: {
+          'application/json': 'Empty'
+        }
+      },
+      {
+        StatusCode: '500',
+        ResponseModels: {
+          'application/json': 'Empty'
+        }
+      },
+      {
+        StatusCode: '400',
+        ResponseModels: {
+          'application/json': 'Empty'
+        }
+      }
+    ]
+  }
+});
+
 const WebhookResource = {
   Type: 'AWS::ApiGateway::Resource',
   Properties: {
@@ -230,6 +282,16 @@ const WebhookPermission = {
   }
 };
 
+const WebhookPassthroughPermission = (lambda) => ({
+  Type: 'AWS::Lambda::Permission',
+  Properties: {
+    FunctionName: cf.ref(lambda),
+    Action: 'lambda:InvokeFunction',
+    Principal: 'apigateway.amazonaws.com',
+    SourceArn: cf.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebhookApi}/*')
+  }
+});
+
 const Outputs = {
   WebhookEndpoint: {
     Description: 'The HTTPS endpoint used to send github webhooks',
@@ -258,4 +320,16 @@ const builder = (lambda) => ({
   }
 });
 
+const passthrough = (lambda) => ({
+  Outputs,
+  Resources: {
+    WebhookApi,
+    WebhookDeployment,
+    WebhookPassthroughMethod: WebhookPassthroughMethod(lambda),
+    WebhookResource,
+    WebhookPassthroughPermission: WebhookPassthroughPermission(lambda)
+  }
+});
+
 module.exports = builder;
+module.exports.passthrough = passthrough;

@@ -1,14 +1,14 @@
 {
   "name": "@mapbox/aws-github-webhook",
   "version": "1.0.0",
-  "description": "Create an API Gateway endpoint to receive Github webhooks",
+  "description": "Create an API Gateway endpoint to receive Github (or any other) webhooks",
   "main": "index.js",
   "repository": "git@github.com:mapbox/aws-github-webhook",
   "author": "Mapbox",
   "license": "MIT",
   "scripts": {
-    "test": "validate-template test/index.test.js",
-    "example": "build-template test/index.test.js"
+    "test": "validate-template test/github.test.js && validate-template test/passthrough.test.js",
+    "example": "build-template test/github.test.js"
   },
   "devDependencies": {
     "eslint": "^3.19.0",

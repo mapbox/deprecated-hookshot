@@ -1,6 +1,8 @@
-# aws-github-webhook
+# hookshot
 
-A simple helper to build a connection between Github webhooks and your AWS Lambda functions.
+![hookshot](https://cloud.githubusercontent.com/assets/515424/25831605/3671112e-341a-11e7-8865-13ef8afc67fc.gif)
+
+A simple helper to build a connection between 3rd-party service webhooks and your AWS Lambda functions.
 
 ## When to use it
 

@@ -1,9 +1,9 @@
 {
-  "name": "@mapbox/aws-github-webhook",
+  "name": "@mapbox/hookshot",
   "version": "1.0.0",
   "description": "Create an API Gateway endpoint to receive Github (or any other) webhooks",
   "main": "index.js",
-  "repository": "git@github.com:mapbox/aws-github-webhook",
+  "repository": "git@github.com:mapbox/hookshot",
   "author": "Mapbox",
   "license": "MIT",
   "scripts": {

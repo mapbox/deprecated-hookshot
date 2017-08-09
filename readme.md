@@ -59,7 +59,7 @@ You should make a CloudFormation template file that looks similar to this:
 
 ```js
 const cf = require('@mapbox/cloudfriend');
-const buildWebhook = require('@mapbox/aws-github-webhook');
+const buildWebhook = require('@mapbox/hookshot');
 
 const myTemplate = {
   Resources: {
@@ -120,7 +120,7 @@ This can be especially useful if you have a simple lambda function that doesn't 
 
 ```js
 const cf = require('@mapbox/cloudfriend');
-const buildWebhook = require('@mapbox/aws-github-webhook');
+const buildWebhook = require('@mapbox/hookshot');
 
 const myTemplate = {
   Resources: {
@@ -145,6 +145,6 @@ module.exports = cf.merge(myTemplate, webhook);
 If you're interested in getting a better understanding of the CloudFormation resources that are built in order to support this workflow, try taking a closer look at the full JSON behind an example template.
 
 ```
-$ cd ~/aws-github-webhook
+$ cd ~/hookshot
 $ npm run example
 ```

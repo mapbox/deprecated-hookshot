@@ -43,7 +43,7 @@ const WebhookUserKey = {
 const WebhookApi = {
   Type: 'AWS::ApiGateway::RestApi',
   Properties: {
-    Name: cf.sub('${AWS::StackName}-github-webhook'),
+    Name: cf.sub('${AWS::StackName}-webhook'),
     FailOnWarnings: true
   }
 };
@@ -54,6 +54,25 @@ const WebhookDeployment = {
   Properties: {
     RestApiId: cf.ref('WebhookApi'),
     StageName: 'github',
+    StageDescription: {
+      MethodSettings: [
+        {
+          HttpMethod: '*',
+          ResourcePath: '/*',
+          ThrottlingBurstLimit: 20,
+          ThrottlingRateLimit: 5
+        }
+      ]
+    }
+  }
+};
+
+const WebhookPassthroughDeployment = {
+  Type: 'AWS::ApiGateway::Deployment',
+  DependsOn: 'WebhookPassthroughMethod',
+  Properties: {
+    RestApiId: cf.ref('WebhookApi'),
+    StageName: 'service',
     StageDescription: {
       MethodSettings: [
         {
@@ -145,7 +164,7 @@ const WebhookPassthroughMethod = (lambda) => ({
       ],
       Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${lambda}.Arn}/invocations`),
       RequestTemplates: {
-        'application/json': "{\"headers\":{},\"body\":$input.json('$')}" // @TODO: include all headers
+        'application/json': "{\"headers\":\"$input.params()\",\"body\":$input.json('$'),\"method\":\"$context.httpMethod\"}"
       }
     },
     MethodResponses: [
@@ -303,6 +322,13 @@ const Outputs = {
   }
 };
 
+const PassthroughOutputs = {
+  WebhookEndpoint: {
+    Description: 'The HTTPS endpoint used to send webhooks',
+    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/service/webhook')
+  }
+};
+
 const builder = (lambda) => ({
   Outputs,
   Resources: {
@@ -321,10 +347,10 @@ const builder = (lambda) => ({
 });
 
 const passthrough = (lambda) => ({
-  Outputs,
+  Outputs: PassthroughOutputs,
   Resources: {
     WebhookApi,
-    WebhookDeployment,
+    WebhookPassthroughDeployment,
     WebhookPassthroughMethod: WebhookPassthroughMethod(lambda),
     WebhookResource,
     WebhookPassthroughPermission: WebhookPassthroughPermission(lambda)

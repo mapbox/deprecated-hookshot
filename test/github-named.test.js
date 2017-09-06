@@ -51,6 +51,6 @@ const myTemplate = {
   }
 };
 
-const webhook = buildWebhook('MyLambda');
+const webhook = buildWebhook('MyLambda', 'MyPrefix');
 
 module.exports = cf.merge(myTemplate, webhook);

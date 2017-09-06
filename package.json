@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "pretest": "eslint test index.js",
-    "test": "validate-template test/github.test.js && validate-template test/passthrough.test.js",
+    "test": "./test/run.sh",
     "example": "build-template test/github.test.js"
   },
   "devDependencies": {

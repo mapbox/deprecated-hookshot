@@ -17,45 +17,45 @@ const Topic = (lambda) => ({
   }
 });
 
-const Permission = (lambda) => ({
+const SnsPermission = (lambda, prefix) => ({
   Type: 'AWS::Lambda::Permission',
   Properties: {
     Action: 'lambda:invokeFunction',
     FunctionName: cf.ref(lambda),
     Principal: 'sns.amazonaws.com',
-    SourceArn: cf.ref('InvocationTopic')
+    SourceArn: cf.ref(`${prefix}InvocationTopic`)
   }
 });
 
-const WebhookUser = {
+const User = () => ({
   Type: 'AWS::IAM::User',
   Properties: {
     Policies: []
   }
-};
+});
 
-const WebhookUserKey = {
+const UserKey = (prefix) => ({
   Type: 'AWS::IAM::AccessKey',
   Properties: {
     Status: 'Active',
-    UserName: cf.ref('WebhookUser')
+    UserName: cf.ref(`${prefix}User`)
   }
-};
+});
 
-const WebhookApi = {
+const Api = () => ({
   Type: 'AWS::ApiGateway::RestApi',
   Properties: {
     Name: cf.sub('${AWS::StackName}-webhook'),
     FailOnWarnings: true
   }
-};
+});
 
-const WebhookStage = {
+const Stage = (prefix) => ({
   Type: 'AWS::ApiGateway::Stage',
   Properties: {
-    DeploymentId: cf.ref(`WebhookDeployment${random}`),
+    DeploymentId: cf.ref(`${prefix}Deployment${random}`),
     StageName: 'hookshot',
-    RestApiId: cf.ref('WebhookApi'),
+    RestApiId: cf.ref(`${prefix}Api`),
     MethodSettings: [
       {
         HttpMethod: '*',
@@ -65,31 +65,22 @@ const WebhookStage = {
       }
     ]
   }
-};
+});
 
-const WebhookDeployment = {
+const Deployment = (prefix) => ({
   Type: 'AWS::ApiGateway::Deployment',
-  DependsOn: 'WebhookMethod',
+  DependsOn: `${prefix}Method`,
   Properties: {
-    RestApiId: cf.ref('WebhookApi'),
+    RestApiId: cf.ref(`${prefix}Api`),
     StageName: 'unused'
   }
-};
+});
 
-const WebhookPassthroughDeployment = {
-  Type: 'AWS::ApiGateway::Deployment',
-  DependsOn: 'WebhookPassthroughMethod',
-  Properties: {
-    RestApiId: cf.ref('WebhookApi'),
-    StageName: 'unused'
-  }
-};
-
-const WebhookMethod = {
+const Method = (prefix) => ({
   Type: 'AWS::ApiGateway::Method',
   Properties: {
-    RestApiId: cf.ref('WebhookApi'),
-    ResourceId: cf.ref('WebhookResource'),
+    RestApiId: cf.ref(`${prefix}Api`),
+    ResourceId: cf.ref(`${prefix}Resource`),
     ApiKeyRequired: false,
     AuthorizationType: 'None',
     HttpMethod: 'POST',
@@ -109,7 +100,7 @@ const WebhookMethod = {
           SelectionPattern: '^invalid.*'
         }
       ],
-      Uri: cf.sub('arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebhookFunction.Arn}/invocations'),
+      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${prefix}Function.Arn}/invocations`),
       RequestTemplates: {
         'application/json': "{\"signature\":\"$input.params('X-Hub-Signature')\",\"body\":$input.json('$')}"
       }
@@ -135,13 +126,13 @@ const WebhookMethod = {
       }
     ]
   }
-};
+});
 
-const WebhookPassthroughMethod = (lambda) => ({
+const PassthroughMethod = (lambda, prefix) => ({
   Type: 'AWS::ApiGateway::Method',
   Properties: {
-    RestApiId: cf.ref('WebhookApi'),
-    ResourceId: cf.ref('WebhookResource'),
+    RestApiId: cf.ref(`${prefix}Api`),
+    ResourceId: cf.ref(`${prefix}Resource`),
     ApiKeyRequired: false,
     AuthorizationType: 'None',
     HttpMethod: 'POST',
@@ -207,20 +198,20 @@ const WebhookPassthroughMethod = (lambda) => ({
   }
 });
 
-const WebhookResource = {
+const Resource = (prefix) => ({
   Type: 'AWS::ApiGateway::Resource',
   Properties: {
-    ParentId: cf.getAtt('WebhookApi', 'RootResourceId'),
-    RestApiId: cf.ref('WebhookApi'),
+    ParentId: cf.getAtt(`${prefix}Api`, 'RootResourceId'),
+    RestApiId: cf.ref(`${prefix}Api`),
     PathPart: 'webhook'
   }
-};
+});
 
-const WebhookOptionsMethod = {
+const OptionsMethod = (prefix) => ({
   Type: 'AWS::ApiGateway::Method',
   Properties: {
-    RestApiId: { Ref: 'WebhookApi' },
-    ResourceId: { Ref: 'WebhookResource' },
+    RestApiId: cf.ref(`${prefix}Api`),
+    ResourceId: cf.ref(`${prefix}Resource`),
     ApiKeyRequired: false,
     AuthorizationType: 'None',
     HttpMethod: 'OPTIONS',
@@ -257,9 +248,9 @@ const WebhookOptionsMethod = {
       }
     }
   }
-};
+});
 
-const WebhookFunctionRole = {
+const FunctionRole = (prefix) => ({
   Type: 'AWS::IAM::Role',
   Properties: {
     AssumeRolePolicyDocument: {
@@ -276,7 +267,7 @@ const WebhookFunctionRole = {
     },
     Policies: [
       {
-        PolicyName: 'WebhookPolicy',
+        PolicyName: `${prefix}Policy`,
         PolicyDocument: {
           Statement: [
             {
@@ -294,7 +285,7 @@ const WebhookFunctionRole = {
                 'sns:Publish'
               ],
               Resource: [
-                cf.ref('InvocationTopic')
+                cf.ref(`${prefix}InvocationTopic`)
               ]
             }
           ]
@@ -302,17 +293,17 @@ const WebhookFunctionRole = {
       }
     ]
   }
-};
+});
 
-const WebhookFunction = {
+const LambdaFunction = (prefix) => ({
   Type: 'AWS::Lambda::Function',
   Properties: {
     Code: {
       ZipFile: cf.join('\n', [
         'var AWS = require("aws-sdk");',
         cf.sub('var sns = new AWS.SNS({ region: "${AWS::Region}" });'),
-        cf.sub('var topic = "${InvocationTopic}";'),
-        cf.sub('var secret = "${WebhookUserKey}";'),
+        cf.sub(`var topic = "\${${prefix}InvocationTopic}";`),
+        cf.sub(`var secret = "\${${prefix}UserKey}";`),
         'var crypto = require("crypto");',
         'module.exports.webhooks = function(event, context) {',
         '  var body = event.body',
@@ -342,91 +333,83 @@ const WebhookFunction = {
         '};'
       ])
     },
-    Role: cf.getAtt('WebhookFunctionRole', 'Arn'),
+    Role: cf.getAtt(`${prefix}FunctionRole`, 'Arn'),
     Description: cf.sub('Github webhook for ${AWS::StackName}'),
     Handler: 'index.webhooks',
     Runtime: 'nodejs6.10',
     Timeout: 30,
     MemorySize: 128
   }
-};
+});
 
-const WebhookPermission = {
+const Permission = (prefix) => ({
   Type: 'AWS::Lambda::Permission',
   Properties: {
-    FunctionName: cf.ref('WebhookFunction'),
+    FunctionName: cf.ref(`${prefix}Function`),
     Action: 'lambda:InvokeFunction',
     Principal: 'apigateway.amazonaws.com',
-    SourceArn: cf.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebhookApi}/*')
+    SourceArn: cf.sub(`arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${prefix}Api}/*`)
   }
-};
+});
 
-const WebhookPassthroughPermission = (lambda) => ({
+const PassthroughPermission = (lambda, prefix) => ({
   Type: 'AWS::Lambda::Permission',
   Properties: {
     FunctionName: cf.ref(lambda),
     Action: 'lambda:InvokeFunction',
     Principal: 'apigateway.amazonaws.com',
-    SourceArn: cf.sub('arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebhookApi}/*')
+    SourceArn: cf.sub(`arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${prefix}Api}/*`)
   }
 });
 
-const Outputs = {
-  WebhookEndpoint: {
-    Description: 'The HTTPS endpoint used to send github webhooks',
-    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/hookshot/webhook')
-  },
-  WebhookSecret: {
-    Description: 'A secret key to give Github to use when signing webhook requests',
-    Value: cf.ref('WebhookUserKey')
-  }
+const EndpointOuput = (prefix) => ({
+  Description: 'The HTTPS endpoint used to send github webhooks',
+  Value: cf.sub(`https://\${${prefix}Api}.execute-api.\${AWS::Region}.amazonaws.com/hookshot/webhook`)
+});
+
+const SecretOutput = (prefix) => ({
+  Description: 'A secret key to give Github to use when signing webhook requests',
+  Value: cf.ref(`${prefix}UserKey`)
+});
+
+const github = (lambda, prefix = 'Webhook') => {
+  const Resources = {};
+  const Outputs = {};
+
+  Resources[`${prefix}InvocationTopic`] = Topic(lambda, prefix);
+  Resources[`${prefix}InvocationPermission`] = SnsPermission(lambda, prefix);
+  Resources[`${prefix}User`] = User(prefix);
+  Resources[`${prefix}UserKey`] = UserKey(prefix);
+  Resources[`${prefix}Api`] = Api(prefix);
+  Resources[`${prefix}Stage`] = Stage(prefix);
+  Resources[`${prefix}Method`] = Method(prefix);
+  Resources[`${prefix}Resource`] = Resource(prefix);
+  Resources[`${prefix}FunctionRole`] = FunctionRole(prefix);
+  Resources[`${prefix}Function`] = LambdaFunction(prefix);
+  Resources[`${prefix}Permission`] = Permission(prefix);
+  Resources[`${prefix}Deployment${random}`] = Deployment(prefix);
+
+  Outputs[`${prefix}EndpointOutput`] = EndpointOuput(prefix);
+  Outputs[`${prefix}SecretOutput`] = SecretOutput(prefix);
+
+  return { Resources, Outputs };
 };
 
-const PassthroughOutputs = {
-  WebhookEndpoint: {
-    Description: 'The HTTPS endpoint used to send webhooks',
-    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/hookshot/webhook')
-  }
+const passthrough = (lambda, prefix = 'Webhook') => {
+  const Resources = {};
+  const Outputs = {};
+
+  Resources[`${prefix}Api`] = Api(prefix);
+  Resources[`${prefix}Stage`] = Stage(prefix);
+  Resources[`${prefix}Method`] = PassthroughMethod(lambda, prefix);
+  Resources[`${prefix}OptionsMethod`] = OptionsMethod(prefix);
+  Resources[`${prefix}Resource`] = Resource(prefix);
+  Resources[`${prefix}Permission`] = PassthroughPermission(lambda, prefix);
+  Resources[`${prefix}Deployment${random}`] = Deployment(prefix);
+
+  Outputs[`${prefix}EndpointOutput`] = EndpointOuput(prefix);
+
+  return { Resources, Outputs };
 };
 
-const builder = (lambda) => {
-  const resources = {
-    Outputs,
-    Resources: {
-      InvocationTopic: Topic(lambda),
-      InvocationPermission: Permission(lambda),
-      WebhookUser,
-      WebhookUserKey,
-      WebhookApi,
-      WebhookStage,
-      WebhookMethod,
-      WebhookResource,
-      WebhookFunctionRole,
-      WebhookFunction,
-      WebhookPermission
-    }
-  };
-
-  resources.Resources[`WebhookDeployment${random}`] = WebhookDeployment;
-  return resources;
-};
-
-const passthrough = (lambda) => {
-  const resources = {
-    Outputs: PassthroughOutputs,
-    Resources: {
-      WebhookApi,
-      WebhookStage,
-      WebhookPassthroughMethod: WebhookPassthroughMethod(lambda),
-      WebhookOptionsMethod,
-      WebhookResource,
-      WebhookPassthroughPermission: WebhookPassthroughPermission(lambda)
-    }
-  };
-
-  resources.Resources[`WebhookDeployment${random}`] = WebhookPassthroughDeployment;
-  return resources;
-};
-
-module.exports = builder;
-module.exports.passthrough = passthrough;
+module.exports = { github, passthrough };

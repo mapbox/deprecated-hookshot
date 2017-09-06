@@ -35,7 +35,7 @@
     "semi-spacing": "error",
     "strict": "error",
 
-    "node/no-unsupported-features": ["error", {"version": 4}],
+    "node/no-unsupported-features": ["error", {"version": 6}],
     "node/no-missing-require": "error"
   }
 }

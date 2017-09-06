@@ -5,16 +5,27 @@ const buildWebhook = require('..').passthrough;
 
 const myTemplate = {
   Resources: {
+    MyLogs: {
+      Type: 'AWS::Logs::LogGroup',
+      Properties: {
+        LogGroupName: cf.sub('/aws/lambda/${AWS::StackName}'),
+        RetentionInDays: 14
+      }
+    },
     MyLambda: {
       Type: 'AWS::Lambda::Function',
       Properties: {
         Code: {
-          S3Bucket: 'my-bucket',
-          S3Key: 'my-code.zip'
+          ZipFile: cf.join('\n', [
+            'module.exports.handler = (event, context, callback) => {',
+            '  console.log(event);',
+            '  callback();',
+            '};'
+          ])
         },
-        FunctionName: 'MyGithubWebhook',
+        FunctionName: cf.stackName,
         Handler: 'index.handler',
-        MemorySize: 256,
+        MemorySize: 128,
         Runtime: 'nodejs6.10',
         Timeout: 300,
         Role: cf.getAtt('LambdaRole', 'Arn')
@@ -40,7 +51,7 @@ const myTemplate = {
                 {
                   Effect: 'Allow',
                   Action: 'logs:*',
-                  Resource: 'arn:aws:logs:*'
+                  Resource: cf.getAtt('MyLogs', 'Arn')
                 }
               ]
             }

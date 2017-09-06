@@ -1,7 +1,9 @@
 'use strict';
 
+const crypto = require('crypto');
 const cf = require('@mapbox/cloudfriend');
 
+const random = crypto.randomBytes(4).toString('hex');
 
 const Topic = (lambda) => ({
   Type: 'AWS::SNS::Topic',
@@ -48,22 +50,29 @@ const WebhookApi = {
   }
 };
 
+const WebhookStage = {
+  Type: 'AWS::ApiGateway::Stage',
+  Properties: {
+    DeploymentId: cf.ref(`WebhookDeployment${random}`),
+    StageName: 'hookshot',
+    RestApiId: cf.ref('WebhookApi'),
+    MethodSettings: [
+      {
+        HttpMethod: '*',
+        ResourcePath: '/*',
+        ThrottlingBurstLimit: 20,
+        ThrottlingRateLimit: 5
+      }
+    ]
+  }
+};
+
 const WebhookDeployment = {
   Type: 'AWS::ApiGateway::Deployment',
   DependsOn: 'WebhookMethod',
   Properties: {
     RestApiId: cf.ref('WebhookApi'),
-    StageName: 'github',
-    StageDescription: {
-      MethodSettings: [
-        {
-          HttpMethod: '*',
-          ResourcePath: '/*',
-          ThrottlingBurstLimit: 20,
-          ThrottlingRateLimit: 5
-        }
-      ]
-    }
+    StageName: 'unused'
   }
 };
 
@@ -72,17 +81,7 @@ const WebhookPassthroughDeployment = {
   DependsOn: 'WebhookPassthroughMethod',
   Properties: {
     RestApiId: cf.ref('WebhookApi'),
-    StageName: 'service',
-    StageDescription: {
-      MethodSettings: [
-        {
-          HttpMethod: '*',
-          ResourcePath: '/*',
-          ThrottlingBurstLimit: 20,
-          ThrottlingRateLimit: 5
-        }
-      ]
-    }
+    StageName: 'unused'
   }
 };
 
@@ -151,15 +150,24 @@ const WebhookPassthroughMethod = (lambda) => ({
       IntegrationHttpMethod: 'POST',
       IntegrationResponses: [
         {
-          StatusCode: 200
+          StatusCode: 200,
+          ResponseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': '\'*\''
+          }
         },
         {
           StatusCode: 500,
-          SelectionPattern: '^error.*'
+          SelectionPattern: '^error.*',
+          ResponseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': '\'*\''
+          }
         },
         {
           StatusCode: 400,
-          SelectionPattern: '^invalid.*'
+          SelectionPattern: '^invalid.*',
+          ResponseParameters: {
+            'method.response.header.Access-Control-Allow-Origin': '\'*\''
+          }
         }
       ],
       Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${lambda}.Arn}/invocations`),
@@ -172,18 +180,27 @@ const WebhookPassthroughMethod = (lambda) => ({
         StatusCode: '200',
         ResponseModels: {
           'application/json': 'Empty'
+        },
+        ResponseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true
         }
       },
       {
         StatusCode: '500',
         ResponseModels: {
           'application/json': 'Empty'
+        },
+        ResponseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true
         }
       },
       {
         StatusCode: '400',
         ResponseModels: {
           'application/json': 'Empty'
+        },
+        ResponseParameters: {
+          'method.response.header.Access-Control-Allow-Origin': true
         }
       }
     ]
@@ -196,6 +213,49 @@ const WebhookResource = {
     ParentId: cf.getAtt('WebhookApi', 'RootResourceId'),
     RestApiId: cf.ref('WebhookApi'),
     PathPart: 'webhook'
+  }
+};
+
+const WebhookOptionsMethod = {
+  Type: 'AWS::ApiGateway::Method',
+  Properties: {
+    RestApiId: { Ref: 'WebhookApi' },
+    ResourceId: { Ref: 'WebhookResource' },
+    ApiKeyRequired: false,
+    AuthorizationType: 'None',
+    HttpMethod: 'OPTIONS',
+    MethodResponses: [
+      {
+        StatusCode: 200,
+        ResponseModels: {
+          'application/json': 'Empty'
+        },
+        ResponseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+          'method.response.header.Access-Control-Allow-Origin': true
+        }
+      }
+    ],
+    Integration: {
+      Type: 'MOCK',
+      IntegrationResponses: [
+        {
+          StatusCode: 200,
+          ResponseParameters: {
+            'method.response.header.Access-Control-Allow-Headers': '\'*\'',
+            'method.response.header.Access-Control-Allow-Methods': '\'POST,OPTIONS\'',
+            'method.response.header.Access-Control-Allow-Origin': '\'*\''
+          },
+          ResponseTemplates: {
+            'application/json': '{}'
+          }
+        }
+      ],
+      RequestTemplates: {
+        'application/json': '{"statusCode":200}'
+      }
+    }
   }
 };
 
@@ -314,7 +374,7 @@ const WebhookPassthroughPermission = (lambda) => ({
 const Outputs = {
   WebhookEndpoint: {
     Description: 'The HTTPS endpoint used to send github webhooks',
-    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/github/webhook')
+    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/hookshot/webhook')
   },
   WebhookSecret: {
     Description: 'A secret key to give Github to use when signing webhook requests',
@@ -325,37 +385,48 @@ const Outputs = {
 const PassthroughOutputs = {
   WebhookEndpoint: {
     Description: 'The HTTPS endpoint used to send webhooks',
-    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/service/webhook')
+    Value: cf.sub('https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/hookshot/webhook')
   }
 };
 
-const builder = (lambda) => ({
-  Outputs,
-  Resources: {
-    InvocationTopic: Topic(lambda),
-    InvocationPermission: Permission(lambda),
-    WebhookUser,
-    WebhookUserKey,
-    WebhookApi,
-    WebhookDeployment,
-    WebhookMethod,
-    WebhookResource,
-    WebhookFunctionRole,
-    WebhookFunction,
-    WebhookPermission
-  }
-});
+const builder = (lambda) => {
+  const resources = {
+    Outputs,
+    Resources: {
+      InvocationTopic: Topic(lambda),
+      InvocationPermission: Permission(lambda),
+      WebhookUser,
+      WebhookUserKey,
+      WebhookApi,
+      WebhookStage,
+      WebhookMethod,
+      WebhookResource,
+      WebhookFunctionRole,
+      WebhookFunction,
+      WebhookPermission
+    }
+  };
 
-const passthrough = (lambda) => ({
-  Outputs: PassthroughOutputs,
-  Resources: {
-    WebhookApi,
-    WebhookPassthroughDeployment,
-    WebhookPassthroughMethod: WebhookPassthroughMethod(lambda),
-    WebhookResource,
-    WebhookPassthroughPermission: WebhookPassthroughPermission(lambda)
-  }
-});
+  resources.Resources[`WebhookDeployment${random}`] = WebhookDeployment;
+  return resources;
+};
+
+const passthrough = (lambda) => {
+  const resources = {
+    Outputs: PassthroughOutputs,
+    Resources: {
+      WebhookApi,
+      WebhookStage,
+      WebhookPassthroughMethod: WebhookPassthroughMethod(lambda),
+      WebhookOptionsMethod,
+      WebhookResource,
+      WebhookPassthroughPermission: WebhookPassthroughPermission(lambda)
+    }
+  };
+
+  resources.Resources[`WebhookDeployment${random}`] = WebhookPassthroughDeployment;
+  return resources;
+};
 
 module.exports = builder;
 module.exports.passthrough = passthrough;

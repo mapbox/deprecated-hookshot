@@ -137,64 +137,10 @@ const PassthroughMethod = (lambda, prefix) => ({
     AuthorizationType: 'None',
     HttpMethod: 'POST',
     Integration: {
-      Type: 'AWS',
+      Type: 'AWS_PROXY',
       IntegrationHttpMethod: 'POST',
-      IntegrationResponses: [
-        {
-          StatusCode: 200,
-          ResponseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': '\'*\''
-          }
-        },
-        {
-          StatusCode: 500,
-          SelectionPattern: '^error.*',
-          ResponseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': '\'*\''
-          }
-        },
-        {
-          StatusCode: 400,
-          SelectionPattern: '^invalid.*',
-          ResponseParameters: {
-            'method.response.header.Access-Control-Allow-Origin': '\'*\''
-          }
-        }
-      ],
-      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${lambda}.Arn}/invocations`),
-      RequestTemplates: {
-        'application/json': "{\"headers\":\"$input.params()\",\"body\":$input.json('$'),\"method\":\"$context.httpMethod\"}"
-      }
-    },
-    MethodResponses: [
-      {
-        StatusCode: '200',
-        ResponseModels: {
-          'application/json': 'Empty'
-        },
-        ResponseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': true
-        }
-      },
-      {
-        StatusCode: '500',
-        ResponseModels: {
-          'application/json': 'Empty'
-        },
-        ResponseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': true
-        }
-      },
-      {
-        StatusCode: '400',
-        ResponseModels: {
-          'application/json': 'Empty'
-        },
-        ResponseParameters: {
-          'method.response.header.Access-Control-Allow-Origin': true
-        }
-      }
-    ]
+      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${lambda}.Arn}/invocations`)
+    }
   }
 });
 

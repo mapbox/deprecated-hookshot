@@ -8,7 +8,7 @@ A simple helper to build a connection between 3rd-party service webhooks and you
 
 ```js
 const hookshot = require('hookshot');
-const webhook = hookshot.github('lambda function ARN');
+const webhook = hookshot.github('lambda function logical name');
 ```
 
 You want to write a Lambda function and you want it to be triggered every time a push is made to a Github repository.
@@ -49,7 +49,7 @@ module.exports.handler = (event, context, callback) => {
 
 ```js
 const hookshot = require('hookshot');
-const webhook = hookshot.passthrough('lambda function ARN');
+const webhook = hookshot.passthrough('lambda function logical name');
 ```
 
 If you simply need to be able to invoke a Lambda function through a straightforward POST request, hookshot has you covered here as well.

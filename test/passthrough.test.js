@@ -19,7 +19,11 @@ const myTemplate = {
           ZipFile: cf.join('\n', [
             'module.exports.handler = (event, context, callback) => {',
             '  console.log(event);',
-            '  callback();',
+            '  callback(null, {',
+            '    statusCode: 200,',
+            '    body: "hello",',
+            '    headers: {"Content-type": "text/plain"}',
+            '  });',
             '};'
           ])
         },

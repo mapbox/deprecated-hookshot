@@ -4,19 +4,20 @@
 
 A simple helper to build a connection between 3rd-party service webhooks and your AWS Lambda functions.
 
-## When to use it
+## Respond to Github push events
 
-Use this module when you wish to invoke a Lambda function in reaction to webhooks delivered by Github **in response to push actions only.** Over time, this library may grow to support other event types.
+```js
+const hookshot = require('hookshot');
+const webhook = hookshot.github('lambda function ARN');
+```
 
-## What it does
+You want to write a Lambda function and you want it to be triggered every time a push is made to a Github repository.
 
-This library provides you with a set of CloudFormation resources to include in a CloudFormation template alongside the Lambda function you wish to have invoked. The provided resources define an API Gateway endpoint and functionality to authenticate webhook payloads coming from Github.
+Hookshot helps you create a CloudFormation template that creates an API Gateway HTTPS endpoint. You define your Lambda function in the same template, and launch a CloudFormation stack. This provides you with a URL and a secret key that you can provide to a Github webhook integration.
 
-You provide a Lambda function that reacts to push events, and we provide the rest.
+Hookshot takes care of authenticating incoming requests. Any requests that did not come from Github or were not properly encrypted using your secret key are rejected, and will never make it to your Lambda function.
 
-## The data your Lambda function receives
-
-It will be a shortened version of a [Github push event](https://developer.github.com/v3/activity/events/types/#pushevent). Here's an example:
+Your Lambda function will receive a shortened version of a [Github push event](https://developer.github.com/v3/activity/events/types/#pushevent). Here's an example:
 
 ```json
 {
@@ -44,107 +45,31 @@ module.exports.handler = (event, context, callback) => {
 }
 ```
 
+## Respond to arbitrary POST requests
+
+```js
+const hookshot = require('hookshot');
+const webhook = hookshot.passthrough('lambda function ARN');
+```
+
+If you simply need to be able to invoke a Lambda function through a straightforward POST request, hookshot has you covered here as well.
+
+Note that in this case, your Lambda function will receive every HTTP POST request that arrives at the API Gateway URL that hookshot helped you create. You are responsible for any authentication that should be performed against incoming requests.
+
+Your Lambda function will receive an event object which includes the request method, headers, and body, as well as other data specific to the API Gateway endpoint created by hookshot. See [AWS documentation here](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-set-up-simple-proxy.html#api-gateway-simple-proxy-for-lambda-input-format) for a full description of the incoming data.
+
+In order to work properly, **your lambda function must return a data object matching in a specific JSON format**. Again, see [AWS documentation for a full description](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-set-up-simple-proxy.html#api-gateway-simple-proxy-for-lambda-output-format).
+
 ## How to use this module
 
 1. Create a CloudFormation template (in JavaScript) that defines
-  - a Lambda function that will react to Github webhook payloads, and perform whatever actions you wish to tak on each push, and
-  - the IAM role that your Lambda function will need in order to accomplish its task.
+  - a Lambda function that you've designed to process incoming requests, and
+  - the IAM role that your Lambda function will need in order to function.
+
 2. Use the JavaScript function exported by this module to create the rest of the resources required. Merge those resources with your own using [cloudfriend](https://github.com/mapbox/cloudfriend).
-3. Create the CloudFormation stack by deploying your template using [cfn-config](https://github.com/mapbox/cfn-config).
-4. Your stack will output the URL for your webhook's endpoint, and a secret token. Provide these values to Github as a new webhook (see `settings/hooks/new` for your repository). Make sure to specify the Content type as `application/json`.
 
-## Example CloudFormation template
+3. Create the CloudFormation stack by deploying your template using [cfn-config](https://github.com/mapbox/cfn-config), or by using [cloudfriend's `build-template` command](https://github.com/mapbox/cloudfriend#cli-tools) to produce the template as a JSON document and launch it in the AWS console.
 
-You should make a CloudFormation template file that looks similar to this:
+4. Your stack will output the URL for your webhook's endpoint, and a secret token. If generating a Github webhook, provide these values to Github as a new webhook (see `settings/hooks/new` for your repository). Make sure to specify the Content type as `application/json`.
 
-```js
-const cf = require('@mapbox/cloudfriend');
-const buildWebhook = require('@mapbox/hookshot');
-
-const myTemplate = {
-  Resources: {
-    MyLambda: {
-      Type: 'AWS::Lambda::Function',
-      Properties: {
-        Code: {
-          S3Bucket: 'my-bucket',
-          S3Key: 'my-code.zip'
-        },
-        FunctionName: 'MyGithubWebhook',
-        Handler: 'index.handler',
-        MemorySize: 256,
-        Runtime: 'nodejs6.10',
-        Timeout: 300,
-        Role: cf.getAtt('LambdaRole', 'Arn')
-      }
-    },
-    LambdaRole: {
-      Type: 'AWS::IAM::Role',
-      Properties: {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 'lambda.amazonaws.com' },
-              Action: 'sts:AssumeRole'
-            }
-          ]
-        },
-        Policies: [
-          {
-            PolicyName: 'write-logs',
-            PolicyDocument: {
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: 'logs:*',
-                  Resource: 'arn:aws:logs:*'
-                }
-              ]
-            }
-          }
-        ]
-      }
-    }
-  }
-};
-
-const webhook = buildWebhook('MyLambda');
-
-module.exports = cf.merge(myTemplate, webhook);
-```
-
-## Using the Serverless Application Model
-
-This can be especially useful if you have a simple lambda function that doesn't require a lot of additional AWS permissions in order to complete its work. Here's an example:
-
-```js
-const cf = require('@mapbox/cloudfriend');
-const buildWebhook = require('@mapbox/hookshot');
-
-const myTemplate = {
-  Resources: {
-    MyLambda: {
-      Type: 'AWS::Serverless::Function',
-      Properties: {
-        Handler: 'index.handler',
-        Runtime: 'nodejs6.10',
-        CodeUri: 's3://my-bucket/my-code.zip'
-      }
-    }
-  }
-};
-
-const webhook = buildWebhook('MyLambda');
-
-module.exports = cf.merge(myTemplate, webhook);
-```
-
-## View a complete example template as JSON
-
-If you're interested in getting a better understanding of the CloudFormation resources that are built in order to support this workflow, try taking a closer look at the full JSON behind an example template.
-
-```
-$ cd ~/hookshot
-$ npm run example
-```
+There are a few examples of very simple github and passthrough templates in this repositories' `/test/` directory.

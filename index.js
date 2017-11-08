@@ -27,18 +27,10 @@ const SnsPermission = (lambda, prefix) => ({
   }
 });
 
-const User = () => ({
-  Type: 'AWS::IAM::User',
+const Secret = () => ({
+  Type: 'AWS::ApiGateway::ApiKey',
   Properties: {
-    Policies: []
-  }
-});
-
-const UserKey = (prefix) => ({
-  Type: 'AWS::IAM::AccessKey',
-  Properties: {
-    Status: 'Active',
-    UserName: cf.ref(`${prefix}User`)
+    Enabled: false
   }
 });
 
@@ -249,7 +241,7 @@ const LambdaFunction = (prefix) => ({
         'var AWS = require("aws-sdk");',
         cf.sub('var sns = new AWS.SNS({ region: "${AWS::Region}" });'),
         cf.sub(`var topic = "\${${prefix}InvocationTopic}";`),
-        cf.sub(`var secret = "\${${prefix}UserKey}";`),
+        cf.sub(`var secret = "\${${prefix}Secret}";`),
         'var crypto = require("crypto");',
         'module.exports.webhooks = function(event, context) {',
         '  var body = event.body',
@@ -320,7 +312,7 @@ const EndpointOuput = (prefix) => ({
 
 const SecretOutput = (prefix) => ({
   Description: 'A secret key to give Github to use when signing webhook requests',
-  Value: cf.ref(`${prefix}UserKey`)
+  Value: cf.ref(`${prefix}Secret`)
 });
 
 const github = (lambda, prefix = 'Webhook') => {
@@ -329,8 +321,7 @@ const github = (lambda, prefix = 'Webhook') => {
 
   Resources[`${prefix}InvocationTopic`] = Topic(lambda, prefix);
   Resources[`${prefix}InvocationPermission`] = SnsPermission(lambda, prefix);
-  Resources[`${prefix}User`] = User(prefix);
-  Resources[`${prefix}UserKey`] = UserKey(prefix);
+  Resources[`${prefix}Secret`] = Secret();
   Resources[`${prefix}Api`] = Api(prefix);
   Resources[`${prefix}Stage`] = Stage(prefix);
   Resources[`${prefix}Method`] = Method(prefix);
@@ -357,8 +348,10 @@ const passthrough = (lambda, prefix = 'Webhook') => {
   Resources[`${prefix}Resource`] = Resource(prefix);
   Resources[`${prefix}Permission`] = PassthroughPermission(lambda, prefix);
   Resources[`${prefix}Deployment${random}`] = Deployment(prefix);
+  Resources[`${prefix}Secret`] = Secret();
 
   Outputs[`${prefix}EndpointOutput`] = EndpointOuput(prefix);
+  Outputs[`${prefix}SecretOutput`] = SecretOutput(prefix);
 
   return { Resources, Outputs };
 };

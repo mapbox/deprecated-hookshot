@@ -7,7 +7,7 @@ A simple helper to build a connection between 3rd-party service webhooks and you
 ## Respond to Github push events
 
 ```js
-const hookshot = require('hookshot');
+const hookshot = require('@mapbox/hookshot');
 const webhook = hookshot.github('lambda function logical name');
 ```
 
@@ -48,7 +48,7 @@ module.exports.handler = (event, context, callback) => {
 ## Respond to arbitrary POST requests
 
 ```js
-const hookshot = require('hookshot');
+const hookshot = require('@mapbox/hookshot');
 const webhook = hookshot.passthrough('lambda function logical name');
 ```
 

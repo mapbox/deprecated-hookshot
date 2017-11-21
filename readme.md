@@ -56,9 +56,9 @@ If you simply need to be able to invoke a Lambda function through a straightforw
 
 Note that in this case, your Lambda function will receive every HTTP POST request that arrives at the API Gateway URL that hookshot helped you create. You are responsible for any authentication that should be performed against incoming requests.
 
-Your Lambda function will receive an event object which includes the request method, headers, and body, as well as other data specific to the API Gateway endpoint created by hookshot. See [AWS documentation here](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-set-up-simple-proxy.html#api-gateway-simple-proxy-for-lambda-input-format) for a full description of the incoming data.
+Your Lambda function will receive an event object which includes the request method, headers, and body, as well as other data specific to the API Gateway endpoint created by hookshot. See [AWS documentation here](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format) for a full description of the incoming data.
 
-In order to work properly, **your lambda function must return a data object matching in a specific JSON format**. Again, see [AWS documentation for a full description](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-set-up-simple-proxy.html#api-gateway-simple-proxy-for-lambda-output-format).
+In order to work properly, **your lambda function must return a data object matching in a specific JSON format**. Again, see [AWS documentation for a full description](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-output-format).
 
 ## How to use this module
 

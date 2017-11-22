@@ -172,7 +172,7 @@ const OptionsMethod = (prefix) => ({
         {
           StatusCode: 200,
           ResponseParameters: {
-            'method.response.header.Access-Control-Allow-Headers': '\'*\'',
+            'method.response.header.Access-Control-Allow-Headers': '\'Content-Type\'',
             'method.response.header.Access-Control-Allow-Methods': '\'POST,OPTIONS\'',
             'method.response.header.Access-Control-Allow-Origin': '\'*\''
           },

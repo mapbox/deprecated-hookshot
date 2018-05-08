@@ -120,6 +120,55 @@ const Method = (prefix) => ({
   }
 });
 
+const PassthroughFunction = (lambda, prefix) => ({
+  Type: 'AWS::Lambda::Function',
+  Properties: {
+    Code: {
+      ZipFile: cf.join('\n', [
+        '"use strict";',
+        'const AWS = require("aws-sdk");',
+        cf.sub('const lambda = new AWS.Lambda({ region: "${AWS::Region}" });'),
+        'module.exports.lambda = (event, context, callback) => {',
+        '  if (event.httpMethod === "OPTIONS") {',
+        '    const response = {',
+        '      statusCode: 200,',
+        '      body: "",',
+        '      headers: {',
+        '        "Access-Control-Allow-Headers": event.headers["Access-Control-Request-Headers"],',
+        '        "Access-Control-Allow-Methods": "POST, OPTIONS",',
+        '        "Access-Control-Allow-Origin": "*"',
+        '      }',
+        '    };',
+        '    callback(null, response);',
+        '    return;',
+        '  }',
+        '  const lambdaParams = {',
+        cf.sub(`    FunctionName: "\${${lambda}}",`),
+        '    Payload: JSON.stringify(event)',
+        '  };',
+        '  lambda.invoke(lambdaParams, (err, response) => {',
+        '    if (err) return callback(err);',
+        '    if (!response || !response.Payload) {',
+        `      callback(new Error("Your Lambda function ${lambda} did not provide a payload"));`,
+        '      return;',
+        '    }',
+        '    var payload = JSON.parse(response.Payload);',
+        '    payload.headers = payload.headers || {};',
+        '    payload.headers["Access-Control-Allow-Origin"] = "*";',
+        '    callback(null, payload)',
+        '  });',
+        '};'
+      ])
+    },
+    Role: cf.getAtt(`${prefix}PassthroughFunctionRole`, 'Arn'),
+    Description: cf.sub('Passthrough function for ${AWS::StackName}'),
+    Handler: 'index.lambda',
+    Runtime: 'nodejs6.10',
+    Timeout: 30,
+    MemorySize: 128
+  }
+});
+
 const PassthroughMethod = (lambda, prefix) => ({
   Type: 'AWS::ApiGateway::Method',
   Properties: {
@@ -131,7 +180,7 @@ const PassthroughMethod = (lambda, prefix) => ({
     Integration: {
       Type: 'AWS_PROXY',
       IntegrationHttpMethod: 'POST',
-      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${lambda}.Arn}/invocations`)
+      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${prefix}PassthroughFunction.Arn}/invocations`)
     }
   }
 });
@@ -153,38 +202,54 @@ const OptionsMethod = (prefix) => ({
     ApiKeyRequired: false,
     AuthorizationType: 'None',
     HttpMethod: 'OPTIONS',
-    MethodResponses: [
-      {
-        StatusCode: 200,
-        ResponseModels: {
-          'application/json': 'Empty'
-        },
-        ResponseParameters: {
-          'method.response.header.Access-Control-Allow-Headers': true,
-          'method.response.header.Access-Control-Allow-Methods': true,
-          'method.response.header.Access-Control-Allow-Origin': true
-        }
-      }
-    ],
     Integration: {
-      Type: 'MOCK',
-      IntegrationResponses: [
-        {
-          StatusCode: 200,
-          ResponseParameters: {
-            'method.response.header.Access-Control-Allow-Headers': '\'Content-Type\'',
-            'method.response.header.Access-Control-Allow-Methods': '\'POST,OPTIONS\'',
-            'method.response.header.Access-Control-Allow-Origin': '\'*\''
-          },
-          ResponseTemplates: {
-            'application/json': '{}'
-          }
-        }
-      ],
-      RequestTemplates: {
-        'application/json': '{"statusCode":200}'
-      }
+      Type: 'AWS_PROXY',
+      IntegrationHttpMethod: 'POST',
+      Uri: cf.sub(`arn:aws:apigateway:\${AWS::Region}:lambda:path/2015-03-31/functions/\${${prefix}PassthroughFunction.Arn}/invocations`)
     }
+  }
+});
+
+const PassthroughFunctionRole = (lambda, prefix) => ({
+  Type: 'AWS::IAM::Role',
+  Properties: {
+    AssumeRolePolicyDocument: {
+      Statement: [
+        {
+          Sid: 'passthroughrole',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'lambda.amazonaws.com'
+          },
+          Action: 'sts:AssumeRole'
+        }
+      ]
+    },
+    Policies: [
+      {
+        PolicyName: `${prefix}PassthroughPolicy`,
+        PolicyDocument: {
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:*'
+              ],
+              Resource: [
+                'arn:aws:logs:*:*:*'
+              ]
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'lambda:InvokeFunction'
+              ],
+              Resource: cf.getAtt(lambda, 'Arn')
+            }
+          ]
+        }
+      }
+    ]
   }
 });
 
@@ -295,10 +360,10 @@ const Permission = (prefix) => ({
   }
 });
 
-const PassthroughPermission = (lambda, prefix) => ({
+const PassthroughFunctionPermission = (lambda, prefix) => ({
   Type: 'AWS::Lambda::Permission',
   Properties: {
-    FunctionName: cf.ref(lambda),
+    FunctionName: cf.ref(`${prefix}PassthroughFunction`),
     Action: 'lambda:InvokeFunction',
     Principal: 'apigateway.amazonaws.com',
     SourceArn: cf.sub(`arn:aws:execute-api:\${AWS::Region}:\${AWS::AccountId}:\${${prefix}Api}/*`)
@@ -341,12 +406,15 @@ const passthrough = (lambda, prefix = 'Webhook') => {
   const Resources = {};
   const Outputs = {};
 
+  Resources[`${prefix}InvocationTopic`] = Topic(lambda, prefix);
   Resources[`${prefix}Api`] = Api(prefix);
   Resources[`${prefix}Stage`] = Stage(prefix);
   Resources[`${prefix}Method`] = PassthroughMethod(lambda, prefix);
+  Resources[`${prefix}PassthroughFunction`] = PassthroughFunction(lambda, prefix);
   Resources[`${prefix}OptionsMethod`] = OptionsMethod(prefix);
   Resources[`${prefix}Resource`] = Resource(prefix);
-  Resources[`${prefix}Permission`] = PassthroughPermission(lambda, prefix);
+  Resources[`${prefix}PassthroughFunctionRole`] = PassthroughFunctionRole(lambda, prefix);
+  Resources[`${prefix}PassthroughFunctionPermission`] = PassthroughFunctionPermission(lambda, prefix);
   Resources[`${prefix}Deployment${random}`] = Deployment(prefix);
   Resources[`${prefix}Secret`] = Secret();
 

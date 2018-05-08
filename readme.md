@@ -60,6 +60,10 @@ Your Lambda function will receive an event object which includes the request met
 
 In order to work properly, **your lambda function must return a data object matching in a specific JSON format**. Again, see [AWS documentation for a full description](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-output-format).
 
+### CORS handling
+
+Your API Gateway endpoint will be set up to allow cross-origin resource sharing (CORS) required by requests from any web page. Preflight `OPTIONS` requests will receive a `200` response with CORS headers. And the response you return from your Lambda function will be modified to include CORS headers.
+
 ## How to use this module
 
 1. Create a CloudFormation template (in JavaScript) that defines
